@@ -1,4 +1,4 @@
-https://script.google.com/macros/s/AKfycbw4_NDsRqkwx4fz4aCM48FmedFdJ1lkKqGHP3IBQq7hlHyv9EBzspgmuvwXyIsEmrA_/exec<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -347,8 +347,8 @@ https://script.google.com/macros/s/AKfycbw4_NDsRqkwx4fz4aCM48FmedFdJ1lkKqGHP3IBQ
     </div>
 
     <script>
-        // ⚠️ IMPORTANT: Replace this URL with your deployed Google Apps Script Web App URL
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4_NDsRqkwx4fz4aCM48FmedFdJ1lkKqGHP3IBQq7hlHyv9EBzspgmuvwXyIsEmrA_/exec';
+        // ⚠️ PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE:
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzlNIqWP-40JZRA16OVqPLb6lfM_nIrXSmI7BWsjX0sDb8ARasrO21TM3Px6yOVUynj/exec';
         
         // Store fetched data globally
         let stockData = [];
@@ -377,7 +377,6 @@ https://script.google.com/macros/s/AKfycbw4_NDsRqkwx4fz4aCM48FmedFdJ1lkKqGHP3IBQ
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
             
-            // Show first 10 rows
             const previewData = data.slice(0, 10);
             
             previewData.forEach(row => {
@@ -396,13 +395,31 @@ https://script.google.com/macros/s/AKfycbw4_NDsRqkwx4fz4aCM48FmedFdJ1lkKqGHP3IBQ
             document.getElementById('preview').classList.add('show');
         }
 
-        async function fetchData() {
-            // Check if URL is configured
-            if (APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') {
-                showStatus('⚠️ Please configure the Apps Script URL in the HTML file. See setup instructions.', 'error');
+        // JSONP callback function
+        window.handleStockData = function(result) {
+            const btn = document.getElementById('fetchBtn');
+            const btnText = document.getElementById('btnText');
+            
+            btn.disabled = false;
+            btnText.innerHTML = '🚀 Fetch Stock Data';
+            
+            if (!result.success) {
+                showStatus(`❌ Error: ${result.error}`, 'error');
                 return;
             }
             
+            stockData = result.data;
+            
+            if (!stockData || stockData.length === 0) {
+                showStatus('❌ Error: No data returned for the selected date range.', 'error');
+                return;
+            }
+            
+            showStatus(`✅ Successfully fetched ${stockData.length} months of data!`, 'success');
+            displayPreview(stockData);
+        };
+
+        function fetchData() {
             const startDate = document.getElementById('startDate').value;
             const endDate = document.getElementById('endDate').value;
             
@@ -422,38 +439,26 @@ https://script.google.com/macros/s/AKfycbw4_NDsRqkwx4fz4aCM48FmedFdJ1lkKqGHP3IBQ
             btn.disabled = true;
             btnText.innerHTML = '<span class="spinner"></span> Fetching...';
             document.getElementById('preview').classList.remove('show');
-            showStatus('⏳ Fetching data from Yahoo Finance via Google Apps Script... This may take 10-20 seconds.', 'loading');
+            showStatus('⏳ Fetching data... This may take 15-30 seconds.', 'loading');
             
-            try {
-                const url = `${APPS_SCRIPT_URL}?start=${startDate}&end=${endDate}`;
-                const response = await fetch(url);
-                
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                
-                const result = await response.json();
-                
-                if (!result.success) {
-                    throw new Error(result.error || 'Unknown error');
-                }
-                
-                stockData = result.data;
-                
-                if (stockData.length === 0) {
-                    throw new Error('No data returned for the selected date range');
-                }
-                
-                showStatus(`✅ Successfully fetched ${stockData.length} months of data!`, 'success');
-                displayPreview(stockData);
-                
-            } catch (error) {
-                console.error(error);
-                showStatus(`❌ Error: ${error.message}. Please try again.`, 'error');
-            } finally {
+            // Use JSONP to bypass CORS
+            const script = document.createElement('script');
+            const callbackName = 'handleStockData';
+            const url = `${APPS_SCRIPT_URL}?start=${startDate}&end=${endDate}&callback=${callbackName}`;
+            
+            script.src = url;
+            script.onerror = function() {
                 btn.disabled = false;
                 btnText.innerHTML = '🚀 Fetch Stock Data';
-            }
+                showStatus('❌ Error: Failed to connect to server. Please try again.', 'error');
+            };
+            
+            // Remove old scripts
+            const oldScripts = document.querySelectorAll('script[data-jsonp]');
+            oldScripts.forEach(s => s.remove());
+            
+            script.setAttribute('data-jsonp', 'true');
+            document.body.appendChild(script);
         }
 
         function downloadCSV() {
@@ -462,14 +467,12 @@ https://script.google.com/macros/s/AKfycbw4_NDsRqkwx4fz4aCM48FmedFdJ1lkKqGHP3IBQ
                 return;
             }
             
-            // Create CSV content
             let csv = 'Date,GOOGL,NVDA,MSFT,AAPL,DJI\n';
             
             stockData.forEach(row => {
                 csv += `${row.date},${row.GOOGL},${row.NVDA},${row.MSFT},${row.AAPL},${row.DJI}\n`;
             });
             
-            // Create download link
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -487,7 +490,6 @@ https://script.google.com/macros/s/AKfycbw4_NDsRqkwx4fz4aCM48FmedFdJ1lkKqGHP3IBQ
             showStatus('✅ CSV file downloaded successfully!', 'success');
         }
 
-        // Initialize on page load
         document.addEventListener('DOMContentLoaded', setDefaultDates);
     </script>
 </body>

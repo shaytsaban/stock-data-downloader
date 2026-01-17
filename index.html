@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Data Downloader</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #1a1a2e;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .stocks-list {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .stock-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .date-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        input[type="date"] {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+
+        input[type="date"]:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            margin-top: 15px;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(17, 153, 142, 0.4);
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+        }
+
+        .status.loading {
+            display: block;
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .status.success {
+            display: block;
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status.error {
+            display: block;
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .preview {
+            margin-top: 25px;
+            display: none;
+        }
+
+        .preview.show {
+            display: block;
+        }
+
+        .preview h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .preview-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 8px;
+            text-align: right;
+            font-weight: 600;
+        }
+
+        .preview-table th:first-child {
+            text-align: left;
+        }
+
+        .preview-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #eee;
+            text-align: right;
+        }
+
+        .preview-table td:first-child {
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .preview-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .preview-table tr:hover {
+            background: #e3f2fd;
+        }
+
+        .table-container {
+            max-height: 300px;
+            overflow-y: auto;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .info-text {
+            font-size: 12px;
+            color: #888;
+            margin-top: 8px;
+        }
+
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+        }
+
+        @media (max-width: 500px) {
+            .date-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 25px;
+            }
+            
+            .stocks-list {
+                gap: 8px;
+            }
+            
+            .stock-badge {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📈 Stock Data Downloader</h1>
+            <p style="font-weight: 600; color: #444; margin-bottom: 5px;">by Dr. Shay Tsaban</p>
+            <p>Download monthly Adjusted Close prices for major tech stocks</p>
+            <div class="stocks-list">
+                <span class="stock-badge">GOOGL</span>
+                <span class="stock-badge">NVDA</span>
+                <span class="stock-badge">MSFT</span>
+                <span class="stock-badge">AAPL</span>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <div class="date-row">
+                <div>
+                    <label for="startDate">Start Date</label>
+                    <input type="date" id="startDate">
+                </div>
+                <div>
+                    <label for="endDate">End Date</label>
+                    <input type="date" id="endDate">
+                </div>
+            </div>
+            <p class="info-text">Default: Last 5 years of monthly data</p>
+        </div>
+
+        <button class="btn btn-primary" id="fetchBtn" onclick="fetchData()">
+            <span id="btnText">🚀 Fetch Stock Data</span>
+        </button>
+
+        <div class="status" id="status"></div>
+
+        <div class="preview" id="preview">
+            <h3>📊 Data Preview (showing first 10 rows)</h3>
+            <div class="table-container">
+                <table class="preview-table" id="previewTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>GOOGL</th>
+                            <th>NVDA</th>
+                            <th>MSFT</th>
+                            <th>AAPL</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+            <button class="btn btn-success" id="downloadBtn" onclick="downloadCSV()">
+                📥 Download CSV File
+            </button>
+        </div>
+
+        <div class="footer">
+            Data source: Yahoo Finance
+        </div>
+    </div>
+
+    <script>
+        // Stock tickers
+        const TICKERS = ['GOOGL', 'NVDA', 'MSFT', 'AAPL'];
+        
+        // Store fetched data globally
+        let stockData = [];
+
+        // Set default dates (last 5 years)
+        function setDefaultDates() {
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setFullYear(startDate.getFullYear() - 5);
+            
+            document.getElementById('endDate').value = formatDate(endDate);
+            document.getElementById('startDate').value = formatDate(startDate);
+        }
+
+        function formatDate(date) {
+            return date.toISOString().split('T')[0];
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.className = 'status ' + type;
+            status.innerHTML = message;
+        }
+
+        function hideStatus() {
+            document.getElementById('status').className = 'status';
+        }
+
+        async function fetchStockData(ticker, startDate, endDate) {
+            // Convert dates to Unix timestamps
+            const period1 = Math.floor(new Date(startDate).getTime() / 1000);
+            const period2 = Math.floor(new Date(endDate).getTime() / 1000);
+            
+            // Yahoo Finance URL
+            const url = `https://query1.finance.yahoo.com/v7/finance/download/${ticker}?period1=${period1}&period2=${period2}&interval=1mo&events=history&includeAdjustedClose=true`;
+            
+            // Use CORS proxy
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+            
+            const response = await fetch(proxyUrl);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch ${ticker}`);
+            }
+            
+            const csvText = await response.text();
+            return parseCSV(csvText, ticker);
+        }
+
+        function parseCSV(csvText, ticker) {
+            const lines = csvText.trim().split('\n');
+            const headers = lines[0].split(',');
+            const adjCloseIndex = headers.findIndex(h => h.includes('Adj Close'));
+            
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',');
+                const date = values[0];
+                const adjClose = parseFloat(values[adjCloseIndex]);
+                
+                if (date && !isNaN(adjClose)) {
+                    data.push({
+                        date: date.substring(0, 7), // YYYY-MM format
+                        value: adjClose.toFixed(2)
+                    });
+                }
+            }
+            return data;
+        }
+
+        function mergeData(allData) {
+            // Create a map of dates to values
+            const dateMap = new Map();
+            
+            TICKERS.forEach((ticker, index) => {
+                allData[index].forEach(item => {
+                    if (!dateMap.has(item.date)) {
+                        dateMap.set(item.date, { date: item.date });
+                    }
+                    dateMap.get(item.date)[ticker] = item.value;
+                });
+            });
+            
+            // Convert to array and sort by date
+            return Array.from(dateMap.values())
+                .filter(row => TICKERS.every(t => row[t])) // Only rows with all tickers
+                .sort((a, b) => a.date.localeCompare(b.date));
+        }
+
+        function displayPreview(data) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            
+            // Show first 10 rows
+            const previewData = data.slice(0, 10);
+            
+            previewData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.date}</td>
+                    <td>${row.GOOGL}</td>
+                    <td>${row.NVDA}</td>
+                    <td>${row.MSFT}</td>
+                    <td>${row.AAPL}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            document.getElementById('preview').classList.add('show');
+        }
+
+        async function fetchData() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (!startDate || !endDate) {
+                showStatus('⚠️ Please select both start and end dates', 'error');
+                return;
+            }
+            
+            if (new Date(startDate) >= new Date(endDate)) {
+                showStatus('⚠️ Start date must be before end date', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('fetchBtn');
+            const btnText = document.getElementById('btnText');
+            
+            btn.disabled = true;
+            btnText.innerHTML = '<span class="spinner"></span> Fetching...';
+            document.getElementById('preview').classList.remove('show');
+            showStatus('⏳ Fetching data from Yahoo Finance... This may take a moment.', 'loading');
+            
+            try {
+                // Fetch all stocks in parallel
+                const allData = await Promise.all(
+                    TICKERS.map(ticker => fetchStockData(ticker, startDate, endDate))
+                );
+                
+                // Merge data by date
+                stockData = mergeData(allData);
+                
+                if (stockData.length === 0) {
+                    throw new Error('No data returned for the selected date range');
+                }
+                
+                showStatus(`✅ Successfully fetched ${stockData.length} months of data!`, 'success');
+                displayPreview(stockData);
+                
+            } catch (error) {
+                console.error(error);
+                showStatus(`❌ Error: ${error.message}. Please try again.`, 'error');
+            } finally {
+                btn.disabled = false;
+                btnText.innerHTML = '🚀 Fetch Stock Data';
+            }
+        }
+
+        function downloadCSV() {
+            if (stockData.length === 0) {
+                showStatus('⚠️ No data to download. Please fetch data first.', 'error');
+                return;
+            }
+            
+            // Create CSV content
+            let csv = 'Date,GOOGL,NVDA,MSFT,AAPL\n';
+            
+            stockData.forEach(row => {
+                csv += `${row.date},${row.GOOGL},${row.NVDA},${row.MSFT},${row.AAPL}\n`;
+            });
+            
+            // Create download link
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            
+            const startDate = document.getElementById('startDate').value.replace(/-/g, '');
+            const endDate = document.getElementById('endDate').value.replace(/-/g, '');
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `stock_adj_close_${startDate}_${endDate}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showStatus('✅ CSV file downloaded successfully!', 'success');
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', setDefaultDates);
+    </script>
+</body>
+</html>

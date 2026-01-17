@@ -342,14 +342,13 @@
         </div>
 
         <div class="footer">
-            Data source: Yahoo Finance
+            Data source: Yahoo Finance via Google Apps Script
         </div>
     </div>
 
     <script>
-        // Stock tickers (^DJI is the Dow Jones Industrial Average)
-        const TICKERS = ['GOOGL', 'NVDA', 'MSFT', 'AAPL', '^DJI'];
-        const DISPLAY_NAMES = ['GOOGL', 'NVDA', 'MSFT', 'AAPL', 'DJI'];
+        // ⚠️ IMPORTANT: Replace this URL with your deployed Google Apps Script Web App URL
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyb1YYhXLwZTTddRZGByhodOI1FFo5CphTMZXRRNcs0y1E6JfDMIgTYnlHXZdAiLuLZ/exec';
         
         // Store fetched data globally
         let stockData = [];
@@ -372,76 +371,6 @@
             const status = document.getElementById('status');
             status.className = 'status ' + type;
             status.innerHTML = message;
-        }
-
-        function hideStatus() {
-            document.getElementById('status').className = 'status';
-        }
-
-        async function fetchStockData(ticker, startDate, endDate) {
-            // Convert dates to Unix timestamps
-            const period1 = Math.floor(new Date(startDate).getTime() / 1000);
-            const period2 = Math.floor(new Date(endDate).getTime() / 1000);
-            
-            // Yahoo Finance URL via corsproxy.io
-            const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/download/${encodeURIComponent(ticker)}?period1=${period1}&period2=${period2}&interval=1mo&events=history&includeAdjustedClose=true`;
-            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`;
-            
-            const response = await fetch(proxyUrl);
-            
-            if (!response.ok) {
-                throw new Error(`Failed to fetch ${ticker}`);
-            }
-            
-            const csvText = await response.text();
-            
-            // Check if we got valid CSV data
-            if (!csvText.includes('Date') || !csvText.includes('Adj Close')) {
-                throw new Error(`Invalid data for ${ticker}`);
-            }
-            
-            return parseCSV(csvText, ticker);
-        }
-
-        function parseCSV(csvText, ticker) {
-            const lines = csvText.trim().split('\n');
-            const headers = lines[0].split(',');
-            const adjCloseIndex = headers.findIndex(h => h.includes('Adj Close'));
-            
-            const data = [];
-            for (let i = 1; i < lines.length; i++) {
-                const values = lines[i].split(',');
-                const date = values[0];
-                const adjClose = parseFloat(values[adjCloseIndex]);
-                
-                if (date && !isNaN(adjClose)) {
-                    data.push({
-                        date: date.substring(0, 7), // YYYY-MM format
-                        value: adjClose.toFixed(2)
-                    });
-                }
-            }
-            return data;
-        }
-
-        function mergeData(allData) {
-            // Create a map of dates to values
-            const dateMap = new Map();
-            
-            TICKERS.forEach((ticker, index) => {
-                const displayName = DISPLAY_NAMES[index];
-                allData[index].forEach(item => {
-                    if (!dateMap.has(item.date)) {
-                        dateMap.set(item.date, { date: item.date });
-                    }
-                    dateMap.get(item.date)[displayName] = item.value;
-                });
-            });
-            
-            // Convert to array and sort by date
-            return Array.from(dateMap.values())
-                .filter(row => DISPLAY_NAMES.every(t => row[t])) // Only rows with all tickers
-                .sort((a, b) => a.date.localeCompare(b.date));
         }
 
         function displayPreview(data) {
@@ -468,6 +397,12 @@
         }
 
         async function fetchData() {
+            // Check if URL is configured
+            if (APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') {
+                showStatus('⚠️ Please configure the Apps Script URL in the HTML file. See setup instructions.', 'error');
+                return;
+            }
+            
             const startDate = document.getElementById('startDate').value;
             const endDate = document.getElementById('endDate').value;
             
@@ -487,23 +422,23 @@
             btn.disabled = true;
             btnText.innerHTML = '<span class="spinner"></span> Fetching...';
             document.getElementById('preview').classList.remove('show');
-            showStatus('⏳ Fetching data from Yahoo Finance... This may take a moment.', 'loading');
+            showStatus('⏳ Fetching data from Yahoo Finance via Google Apps Script... This may take 10-20 seconds.', 'loading');
             
             try {
-                // Fetch all stocks sequentially to avoid rate limiting
-                const allData = [];
-                for (let i = 0; i < TICKERS.length; i++) {
-                    showStatus(`⏳ Fetching ${DISPLAY_NAMES[i]} (${i + 1}/${TICKERS.length})...`, 'loading');
-                    const data = await fetchStockData(TICKERS[i], startDate, endDate);
-                    allData.push(data);
-                    // Small delay between requests
-                    if (i < TICKERS.length - 1) {
-                        await new Promise(resolve => setTimeout(resolve, 300));
-                    }
+                const url = `${APPS_SCRIPT_URL}?start=${startDate}&end=${endDate}`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
                 }
                 
-                // Merge data by date
-                stockData = mergeData(allData);
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Unknown error');
+                }
+                
+                stockData = result.data;
                 
                 if (stockData.length === 0) {
                     throw new Error('No data returned for the selected date range');

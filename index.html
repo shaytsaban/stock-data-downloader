@@ -25,7 +25,7 @@
             background: rgba(255, 255, 255, 0.95);
             border-radius: 20px;
             padding: 40px;
-            max-width: 600px;
+            max-width: 700px;
             width: 100%;
             box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
         }
@@ -61,6 +61,10 @@
             border-radius: 20px;
             font-size: 13px;
             font-weight: 600;
+        }
+
+        .stock-badge.index {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
         }
 
         .form-group {
@@ -199,7 +203,7 @@
         .preview-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 13px;
+            font-size: 12px;
             border-radius: 10px;
             overflow: hidden;
         }
@@ -207,7 +211,7 @@
         .preview-table th {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 12px 8px;
+            padding: 12px 6px;
             text-align: right;
             font-weight: 600;
         }
@@ -217,7 +221,7 @@
         }
 
         .preview-table td {
-            padding: 10px 8px;
+            padding: 10px 6px;
             border-bottom: 1px solid #eee;
             text-align: right;
         }
@@ -271,7 +275,11 @@
             
             .stock-badge {
                 padding: 6px 12px;
-                font-size: 12px;
+                font-size: 11px;
+            }
+
+            .preview-table {
+                font-size: 10px;
             }
         }
     </style>
@@ -287,6 +295,7 @@
                 <span class="stock-badge">NVDA</span>
                 <span class="stock-badge">MSFT</span>
                 <span class="stock-badge">AAPL</span>
+                <span class="stock-badge index">^DJI</span>
             </div>
         </div>
 
@@ -321,6 +330,7 @@
                             <th>NVDA</th>
                             <th>MSFT</th>
                             <th>AAPL</th>
+                            <th>DJI</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody"></tbody>
@@ -337,8 +347,9 @@
     </div>
 
     <script>
-        // Stock tickers
-        const TICKERS = ['GOOGL', 'NVDA', 'MSFT', 'AAPL'];
+        // Stock tickers (^DJI is the Dow Jones Industrial Average)
+        const TICKERS = ['GOOGL', 'NVDA', 'MSFT', 'AAPL', '^DJI'];
+        const DISPLAY_NAMES = ['GOOGL', 'NVDA', 'MSFT', 'AAPL', 'DJI'];
         
         // Store fetched data globally
         let stockData = [];
@@ -372,18 +383,23 @@
             const period1 = Math.floor(new Date(startDate).getTime() / 1000);
             const period2 = Math.floor(new Date(endDate).getTime() / 1000);
             
-            // Yahoo Finance URL
-            const url = `https://query1.finance.yahoo.com/v7/finance/download/${ticker}?period1=${period1}&period2=${period2}&interval=1mo&events=history&includeAdjustedClose=true`;
-            
-            // Use CORS proxy
-            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+            // Yahoo Finance URL via corsproxy.io
+            const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/download/${encodeURIComponent(ticker)}?period1=${period1}&period2=${period2}&interval=1mo&events=history&includeAdjustedClose=true`;
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`;
             
             const response = await fetch(proxyUrl);
+            
             if (!response.ok) {
                 throw new Error(`Failed to fetch ${ticker}`);
             }
             
             const csvText = await response.text();
+            
+            // Check if we got valid CSV data
+            if (!csvText.includes('Date') || !csvText.includes('Adj Close')) {
+                throw new Error(`Invalid data for ${ticker}`);
+            }
+            
             return parseCSV(csvText, ticker);
         }
 
@@ -413,17 +429,18 @@
             const dateMap = new Map();
             
             TICKERS.forEach((ticker, index) => {
+                const displayName = DISPLAY_NAMES[index];
                 allData[index].forEach(item => {
                     if (!dateMap.has(item.date)) {
                         dateMap.set(item.date, { date: item.date });
                     }
-                    dateMap.get(item.date)[ticker] = item.value;
+                    dateMap.get(item.date)[displayName] = item.value;
                 });
             });
             
             // Convert to array and sort by date
             return Array.from(dateMap.values())
-                .filter(row => TICKERS.every(t => row[t])) // Only rows with all tickers
+                .filter(row => DISPLAY_NAMES.every(t => row[t])) // Only rows with all tickers
                 .sort((a, b) => a.date.localeCompare(b.date));
         }
 
@@ -442,6 +459,7 @@
                     <td>${row.NVDA}</td>
                     <td>${row.MSFT}</td>
                     <td>${row.AAPL}</td>
+                    <td>${row.DJI}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -472,10 +490,17 @@
             showStatus('⏳ Fetching data from Yahoo Finance... This may take a moment.', 'loading');
             
             try {
-                // Fetch all stocks in parallel
-                const allData = await Promise.all(
-                    TICKERS.map(ticker => fetchStockData(ticker, startDate, endDate))
-                );
+                // Fetch all stocks sequentially to avoid rate limiting
+                const allData = [];
+                for (let i = 0; i < TICKERS.length; i++) {
+                    showStatus(`⏳ Fetching ${DISPLAY_NAMES[i]} (${i + 1}/${TICKERS.length})...`, 'loading');
+                    const data = await fetchStockData(TICKERS[i], startDate, endDate);
+                    allData.push(data);
+                    // Small delay between requests
+                    if (i < TICKERS.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                    }
+                }
                 
                 // Merge data by date
                 stockData = mergeData(allData);
@@ -503,10 +528,10 @@
             }
             
             // Create CSV content
-            let csv = 'Date,GOOGL,NVDA,MSFT,AAPL\n';
+            let csv = 'Date,GOOGL,NVDA,MSFT,AAPL,DJI\n';
             
             stockData.forEach(row => {
-                csv += `${row.date},${row.GOOGL},${row.NVDA},${row.MSFT},${row.AAPL}\n`;
+                csv += `${row.date},${row.GOOGL},${row.NVDA},${row.MSFT},${row.AAPL},${row.DJI}\n`;
             });
             
             // Create download link
